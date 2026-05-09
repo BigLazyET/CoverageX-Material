@@ -29,6 +29,20 @@ public class CalculatorTests
     }
 
     [Fact]
+    public void Square_ReturnsSquaredValue()
+    {
+        var c = new Calculator();
+        Assert.Equal(16, c.Square(4));
+    }
+
+    [Fact]
+    public void Cube_ReturnsCubedValue()
+    {
+        var c = new Calculator();
+        Assert.Equal(27, c.Cube(3));
+    }
+
+    [Fact]
     public void Div_ReturnsQuotient()
     {
         var c = new Calculator();
@@ -40,6 +54,27 @@ public class CalculatorTests
     {
         var c = new Calculator();
         Assert.Throws<DivideByZeroException>(() => c.Div(1, 0));
+    }
+
+    [Fact]
+    public void Sin_ReturnsExpectedValue()
+    {
+        var c = new Calculator();
+        Assert.Equal(1d, c.Sin(Math.PI / 2), 10);
+    }
+
+    [Fact]
+    public void Cos_ReturnsExpectedValue()
+    {
+        var c = new Calculator();
+        Assert.Equal(1d, c.Cos(0), 10);
+    }
+
+    [Fact]
+    public void Tan_ReturnsExpectedValue()
+    {
+        var c = new Calculator();
+        Assert.Equal(1d, c.Tan(Math.PI / 4), 10);
     }
 }
 
