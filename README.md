@@ -29,16 +29,24 @@ dotnet-coverage collect "dotnet run --project ./src/SampleApi" -f cobertura -o ~
 
 启动后，保持应用运行，并对 `SampleApi` 发起接口请求进行测试。
 
-如果希望在采集过程中按快照方式导出覆盖率结果，可先使用 `dotnet-coverage collect` 启动会话，然后通过 `dotnet-coverage snapshot` 生成覆盖率 XML。典型流程如下：
+如果希望在采集过程中按快照方式导出覆盖率结果，可以给 `collect` 指定 `session-id`，在应用运行过程中调用 `snapshot` 生成中间覆盖率文件，再通过 `merge` 转成 XML。典型流程如下：
 
 ```bash
-dotnet-coverage collect "dotnet run --project ./src/SampleApi" --background --session-id sampleapi-session
+dotnet-coverage collect --session-id sampleapi-session "dotnet run --project ./src/SampleApi"
 ```
 
-完成请求测试后，执行：
+这条命令会一直占用当前终端，直到 `SampleApi` 进程退出，或者后续通过 `dotnet-coverage shutdown sampleapi-session` 结束该会话。如果你希望在一个 shell 脚本里继续执行后续请求和快照导出，就需要把这条命令放到 shell 后台执行，或者拆成两个终端分别操作。
+
+完成请求测试后，先生成快照文件：
 
 ```bash
-dotnet-coverage snapshot sampleapi-session -f cobertura -o ~/.coveragex/output/sampleapi-snapshot.xml
+dotnet-coverage snapshot sampleapi-session -o ~/.coveragex/output/sampleapi-snapshot.coverage
+```
+
+再把快照文件转换成 cobertura XML：
+
+```bash
+dotnet-coverage merge ~/.coveragex/output/sampleapi-snapshot.coverage -f cobertura -o ~/.coveragex/output/sampleapi-snapshot.xml
 ```
 
 如果本机尚未安装 `dotnet-coverage`，可先执行：
@@ -68,7 +76,7 @@ coveragex lreport \
 	--target main \
 	--source-directory ~/github/CoverageX-Material \
 	--report-input-directories ~/.coveragex/output \
-	--report-directory ~/.coveragex/incremental-report \
+	--report-directory ~/.coveragex/report \
 	--report-type Html
 ```
 
@@ -77,10 +85,10 @@ coveragex lreport \
 - `--source`：生成这份覆盖率 XML 时对应的源码分支，通常就是你当前正在测试的分支。
 - `--target`：用于做 diff 对比的目标分支，例如 `main`。
 - `--source-directory`：必须指向本地 Git working tree 根目录。
-- `--report-input-directories`：传入上一步生成 XML 的目录。CoverageX 会扫描该目录顶层的 `*.xml` 文件。
+- `--report-input-directories`：传入一个或多个 XML 目录，多个目录之间用 `;` 分隔。CoverageX 会扫描每个目录顶层的 `*.xml` 文件。
 - `--report-directory`：增量覆盖率报告输出目录。
 
-如果你只想传入某一个 XML 文件，也可以改用 `--report-input-files`：
+如果你只想传入一个或多个 XML 文件，也可以改用 `--report-input-files`：
 
 ```bash
 coveragex lreport \
@@ -88,7 +96,7 @@ coveragex lreport \
 	--target main \
 	--source-directory ~/github/CoverageX-Material \
 	--report-input-files ~/.coveragex/output/sampleapi-snapshot.xml \
-	--report-directory ~/.coveragex/incremental-report \
+	--report-directory ~/.coveragex/report \
 	--report-type Html
 ```
 
@@ -104,7 +112,7 @@ coveragex areport \
 	--target main \
 	--repository-url https://github.com/your-org/CoverageX-Material.git \
 	--report-input-directories ~/.coveragex/output \
-	--report-directory ~/.coveragex/incremental-report \
+	--report-directory ~/.coveragex/report \
 	--report-type Html
 ```
 
@@ -114,3 +122,70 @@ coveragex areport \
 - `lreport` 要求当前本地仓库 HEAD 必须与 `runtime-branch` 一致；如果不显式传 `--runtime-branch`，CoverageX 会默认使用 `--source` 作为 `runtime-branch`。
 - `source`、`target`、`runtime-branch` 目前都要求传分支名，不会自动帮你 fetch 或 checkout 缺失分支。
 - `filter-mode` 支持 `diff`、`merge`、`explicit` 三种模式；如果不需要额外过滤，直接用默认行为即可。
+
+## 实际演练：SampleLibrary 与 SampleApi
+
+下面提供 `scripts` 目录中的现成脚本，演示如何先生成覆盖率 XML，再通过 `coveragex lreport` 生成增量覆盖率报告。
+
+执行前请先确认：
+
+- 当前目录位于仓库根目录 `CoverageX-Material`。
+- `coveragex` 命令已可执行。
+- 当前 Git 分支就是你要分析的功能分支；如需覆盖默认分支名，可在执行脚本时传入环境变量 `SOURCE_BRANCH`、`TARGET_BRANCH`。
+- 初次执行前可先运行 `chmod +x ./scripts/*.sh`。
+
+### SampleLibrary 演练
+
+这个演练使用 `SampleLibrary.UnitTests` 一次性生成 XML，然后基于该 XML 生成 `SampleLibrary` 的增量覆盖率报告。
+
+#### 1. 生成覆盖率 XML
+
+执行 [scripts/samplelibrary-generate-xml.sh](/Users/tc/github/CoverageX-Material/scripts/samplelibrary-generate-xml.sh)：
+
+```bash
+./scripts/samplelibrary-generate-xml.sh
+```
+
+#### 2. 生成覆盖率报告
+
+执行 [scripts/samplelibrary-generate-report.sh](/Users/tc/github/CoverageX-Material/scripts/samplelibrary-generate-report.sh)：
+
+```bash
+SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/samplelibrary-generate-report.sh
+```
+
+### SampleApi 演练
+
+这个演练使用 `dotnet-coverage collect` 启动 `SampleApi`，对接口发起真实请求后导出 XML，再基于该 XML 生成 `SampleApi` 的增量覆盖率报告。
+
+这里的关键点是：`SampleApi` 属于常驻服务，如果把 `dotnet-coverage collect` 以前台方式执行，脚本会阻塞在这一行，不会继续往下跑。因此下面的脚本使用 shell 的 `&` 把采集进程放到后台，再通过 `shutdown` 显式结束会话。
+
+#### 1. 生成覆盖率 XML
+
+执行 [scripts/sampleapi-generate-xml.sh](/Users/tc/github/CoverageX-Material/scripts/sampleapi-generate-xml.sh)：
+
+```bash
+./scripts/sampleapi-generate-xml.sh
+```
+
+如需覆盖默认地址或会话名，可以这样执行：
+
+```bash
+BASE_URL=http://localhost:5099 SESSION_ID=sampleapi-session ./scripts/sampleapi-generate-xml.sh
+```
+
+#### 2. 生成覆盖率报告
+
+执行 [scripts/sampleapi-generate-report.sh](/Users/tc/github/CoverageX-Material/scripts/sampleapi-generate-report.sh)：
+
+```bash
+SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/sampleapi-generate-report.sh
+```
+
+### 补充说明
+
+- 如果当前仓库 HEAD 不在 `SOURCE_BRANCH`，`coveragex lreport` 会直接报错；这时要么先切到对应分支，要么改用 `areport`。
+- `SampleApi` 脚本依赖 `curl` 和 `dotnet-coverage`。
+- `SampleApi` 的脚本里使用的是 shell 的后台执行 `&`，不是 `dotnet-coverage collect --background`。这是因为这里用的是 `collect` 的命令模式，官方文档中的 `--background` 只适用于 server mode。
+- 如果不使用 `&`、第二个终端，或者其它后台运行方式，`dotnet-coverage collect --session-id ... "dotnet run ..."` 会一直占用前台，脚本后续步骤不会自动继续执行。
+- `SampleLibrary` 生成的 XML 通常位于 `TestResults` 子目录下，因此脚本使用整个输出目录交给 `coveragex` 扫描更稳妥。
