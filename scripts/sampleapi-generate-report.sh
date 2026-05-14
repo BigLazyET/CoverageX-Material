@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE_BRANCH="${SOURCE_BRANCH:-feature/my-change}"
+SOURCE_BRANCH="${SOURCE_BRANCH:-foo}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 XML_FILE="$HOME/.coveragex/output/sampleapi/sampleapi-snapshot.xml"
 REPORT_DIR="$HOME/.coveragex/report/sampleapi"
