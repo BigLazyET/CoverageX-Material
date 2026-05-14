@@ -160,6 +160,8 @@ SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/samplelibrary-gener
 
 这里的关键点是：`SampleApi` 属于常驻服务，如果把 `dotnet-coverage collect` 以前台方式执行，脚本会阻塞在这一行，不会继续往下跑。因此下面的脚本使用 shell 的 `&` 把采集进程放到后台，再通过 `shutdown` 显式结束会话。
 
+对于 `macOS arm64`，这里使用的是 `dotnet-coverage collect` 命令模式配合多次传入 `--include-files` 的写法。关键点是每个 DLL 都要单独传一个 `--include-files` 参数，不能用 `;` 拼成一个值交给 shell。
+
 #### 1. 生成覆盖率 XML
 
 执行 [scripts/sampleapi-generate-xml.sh](/Users/tc/github/CoverageX-Material/scripts/sampleapi-generate-xml.sh)：
@@ -172,6 +174,18 @@ SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/samplelibrary-gener
 
 ```bash
 BASE_URL=http://localhost:5099 SESSION_ID=sampleapi-session ./scripts/sampleapi-generate-xml.sh
+```
+
+如果目标端口已被旧的 `SampleApi`/`dotnet` 进程占用，脚本会先尝试自动释放端口；如果占用者不是 `SampleApi`/`dotnet`，脚本会默认中止，避免误杀其他服务。明确需要强制结束任意占用进程时，可这样执行：
+
+```bash
+FORCE_KILL_PORT_CONFLICT=1 ./scripts/sampleapi-generate-xml.sh
+```
+
+如需覆盖目标框架，可以这样执行：
+
+```bash
+TARGET_FRAMEWORK=net8.0 ./scripts/sampleapi-generate-xml.sh
 ```
 
 #### 2. 生成覆盖率报告
@@ -188,4 +202,6 @@ SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/sampleapi-generate-
 - `SampleApi` 脚本依赖 `curl` 和 `dotnet-coverage`。
 - `SampleApi` 的脚本里使用的是 shell 的后台执行 `&`，不是 `dotnet-coverage collect --background`。这是因为这里用的是 `collect` 的命令模式，官方文档中的 `--background` 只适用于 server mode。
 - 如果不使用 `&`、第二个终端，或者其它后台运行方式，`dotnet-coverage collect --session-id ... "dotnet run ..."` 会一直占用前台，脚本后续步骤不会自动继续执行。
+- `SampleApi` 的控制器路由当前是 `api/...`，例如健康检查是 `/api/health`，计算接口是 `/api/calculator/multiply`、`/api/calculator/divide`，项目条目接口是 `/api/items`。
+- `SampleApi` 脚本启动前会检查 `BASE_URL` 对应端口是否已被监听，并优先清理旧的 `SampleApi`/`dotnet` 相关进程；如需无条件清理当前端口占用者，可显式传入 `FORCE_KILL_PORT_CONFLICT=1`。
 - `SampleLibrary` 生成的 XML 通常位于 `TestResults` 子目录下，因此脚本使用整个输出目录交给 `coveragex` 扫描更稳妥。
