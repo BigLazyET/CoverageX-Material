@@ -27,6 +27,12 @@ public class CalculatorController : ControllerBase
         return Ok(new { a, b, operation = "multiply", result = _calculator.Mul(a, b) });
     }
 
+    [HttpGet("square")]
+    public IActionResult Square([FromQuery] int a)
+    {
+        return Ok(new { a, operation = "square", result = _calculator.Square(a)});
+    }
+
     [HttpGet("divide")]
     public IActionResult Divide([FromQuery] int a, [FromQuery] int b)
     {
@@ -38,6 +44,12 @@ public class CalculatorController : ControllerBase
         {
             return BadRequest(new { error = "divisor cannot be zero" });
         }
+    }
+
+    [HttpGet("cube")]
+    public IActionResult Cube([FromQuery] int a)
+    {
+        return Ok(new { a, operation = "cube", result = _calculator.Cube(a)});
     }
 
     [HttpGet("summary")]
@@ -56,5 +68,23 @@ public class CalculatorController : ControllerBase
             multiply = _calculator.Mul(a, b),
             divide = division
         });
+    }
+
+    [HttpGet("sin")]
+    public IActionResult Sin([FromQuery] double a)
+    {
+        return Ok(new { a, operation = "sin", result = _calculator.Sin(a)});
+    }
+
+    [HttpGet("cos")]
+    public IActionResult Cos([FromQuery] double a)
+    {
+        return Ok(new { a, operation = "cos", result = _calculator.Cos(a)});
+    }
+
+    [HttpGet("tan")]
+    public IActionResult Tan([FromQuery] double a)
+    {        
+        return Ok(new { a, operation = "tan", result = _calculator.Tan(a)});
     }
 }
