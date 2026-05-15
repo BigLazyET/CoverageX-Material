@@ -196,10 +196,35 @@ TARGET_FRAMEWORK=net8.0 ./scripts/sampleapi-generate-xml.sh
 SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/sampleapi-generate-report.sh
 ```
 
+#### 3. 使用 areport 生成覆盖率报告
+
+如果你希望让 `coveragex` 自己去拉取 `SampleApi` 对应仓库，而不是直接使用当前本地工作树，可以执行 [scripts/sampleapi-areport.sh](/Users/tc/github/CoverageX-Material/scripts/sampleapi-areport.sh)。
+
+这个脚本会复用前一步生成的 `~/.coveragex/output/sampleapi/sampleapi-snapshot.xml`，并通过 `REPOSITORY_URL` 让 `coveragex areport` 去拉取或复用 managed source tree。
+
+示例：
+
+```bash
+REPOSITORY_URL=https://github.com/your-org/CoverageX-Material.git SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/sampleapi-areport.sh
+```
+
+如果仓库是私有的，还可以附带认证信息：
+
+```bash
+REPOSITORY_URL=https://github.com/your-org/CoverageX-Material.git REPOSITORY_USERNAME=your-username REPOSITORY_PASSWORD=your-token SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/sampleapi-areport.sh
+```
+
+如需显式指定运行时分支，可以附加 `RUNTIME_BRANCH`：
+
+```bash
+REPOSITORY_URL=https://github.com/your-org/CoverageX-Material.git SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main RUNTIME_BRANCH=feature/my-change ./scripts/sampleapi-areport.sh
+```
+
 ### 补充说明
 
 - 如果当前仓库 HEAD 不在 `SOURCE_BRANCH`，`coveragex lreport` 会直接报错；这时要么先切到对应分支，要么改用 `areport`。
 - `SampleApi` 脚本依赖 `curl` 和 `dotnet-coverage`。
+- `scripts/sampleapi-areport.sh` 依赖 `coveragex areport`，并且必须能够通过 `REPOSITORY_URL` 拉取到当前项目仓库；未显式传入时，脚本会优先尝试读取当前仓库的 `remote.origin.url`。
 - `SampleApi` 的脚本里使用的是 shell 的后台执行 `&`，不是 `dotnet-coverage collect --background`。这是因为这里用的是 `collect` 的命令模式，官方文档中的 `--background` 只适用于 server mode。
 - 如果不使用 `&`、第二个终端，或者其它后台运行方式，`dotnet-coverage collect --session-id ... "dotnet run ..."` 会一直占用前台，脚本后续步骤不会自动继续执行。
 - `SampleApi` 的控制器路由当前是 `api/...`，例如健康检查是 `/api/health`，计算接口是 `/api/calculator/multiply`、`/api/calculator/divide`，项目条目接口是 `/api/items`。
