@@ -1,6 +1,33 @@
 # CoverageX-Material
 CoverageX Material
 
+## 一次调用完成采集与增量报告
+
+工具已安装、本地当前分支与运行时分支一致时：
+
+```bash
+bash scripts/generate-report.sh sampleapi
+bash scripts/generate-report.sh samplelibrary
+```
+
+默认比较 `foo` 与 `main`，可设置 `SOURCE_BRANCH`、`TARGET_BRANCH`、`RUNTIME_BRANCH`。流程先预检 Git 和工具，再采集、校验新鲜 XML，最后用 `lreport` 显式文件参数生成 Html；不 clone、不重复扫描目录。需要 Python 3 和 CoverageX Skill 校验脚本，默认从相邻 `CoverageX-Agent-Skill` 仓库读取；其他安装位置设置 `COVERAGEX_SKILL_DIR`。
+
+API 默认保留请求完成时的 snapshot 口径。明确需要进程结束时的最终覆盖率，可运行：
+
+```bash
+COLLECTION_MODE=final bash scripts/generate-report.sh sampleapi
+```
+
+final 直接输出 Cobertura XML，省去 snapshot/merge；它可能包含 shutdown 代码的覆盖，不能当成与快照天然等价。两种模式执行相同请求，插桩同样的两个 DLL。每轮都执行匹配的增量构建，随后直接运行 DLL，不用旧产物跳过构建。
+
+采集在 `~/.coveragex/output/<sample>/run.*` 新建目录，不删除历史产物；`latest-xml-path` 记录最近成功的 XML 显式路径，报告默认在该轮目录的 `report/`。可用 `OUTPUT_DIR`、`REPORT_DIR`、`COVERAGEX_EXECUTABLE` 指定临时输出或本地 CLI。各阶段以 JSON 行向 stderr 输出毫秒耗时；dotnet test 内部构建/测试/导出合并计时。
+
+单独的采集/报告脚本仍可使用；组合入口额外验证 XML 新鲜度与结构，失败即停止。SampleLibrary 使用已有 Code Coverage collector，不自动安装或更换采集器。自动检查：
+
+```bash
+python3 -m unittest discover -s scripts -p 'test_*.py'
+```
+
 ## 生成覆盖率 XML
 
 下面提供两种常见方式来生成覆盖率产物 XML，输出格式均以 `cobertura` 为例。
@@ -85,7 +112,7 @@ coveragex lreport \
 - `--source`：生成这份覆盖率 XML 时对应的源码分支，通常就是你当前正在测试的分支。
 - `--target`：用于做 diff 对比的目标分支，例如 `main`。
 - `--source-directory`：必须指向本地 Git working tree 根目录。
-- `--report-input-directories`：传入一个或多个 XML 目录，多个目录之间用 `;` 分隔。CoverageX 会扫描每个目录顶层的 `*.xml` 文件。
+- `--report-input-directories`：传入一个或多个 XML 目录，多个目录之间用 `;` 分隔。CoverageX 会递归扫描 `*.xml`；确定本轮产物后优先传 `--report-input-files`。
 - `--report-directory`：增量覆盖率报告输出目录。
 
 如果你只想传入一个或多个 XML 文件，也可以改用 `--report-input-files`：
@@ -170,17 +197,13 @@ SOURCE_BRANCH=feature/my-change TARGET_BRANCH=main ./scripts/samplelibrary-gener
 ./scripts/sampleapi-generate-xml.sh
 ```
 
-如需覆盖默认地址或会话名，可以这样执行：
+如需指定会话名，可以这样执行：
 
 ```bash
-BASE_URL=http://localhost:5099 SESSION_ID=sampleapi-session ./scripts/sampleapi-generate-xml.sh
+SESSION_ID=sampleapi-session bash ./scripts/sampleapi-generate-xml.sh
 ```
 
-如果目标端口已被旧的 `SampleApi`/`dotnet` 进程占用，脚本会先尝试自动释放端口；如果占用者不是 `SampleApi`/`dotnet`，脚本会默认中止，避免误杀其他服务。明确需要强制结束任意占用进程时，可这样执行：
-
-```bash
-FORCE_KILL_PORT_CONFLICT=1 ./scripts/sampleapi-generate-xml.sh
-```
+SampleApi 当前在应用中固定监听 20000，脚本拒绝其他端口。端口占用时请先结束其所属进程；脚本不会自动杀死其他应用。默认会话名每次唯一，只清理本轮会话。
 
 如需覆盖目标框架，可以这样执行：
 
@@ -228,5 +251,5 @@ REPOSITORY_URL=https://github.com/your-org/CoverageX-Material.git SOURCE_BRANCH=
 - `SampleApi` 的脚本里使用的是 shell 的后台执行 `&`，不是 `dotnet-coverage collect --background`。这是因为这里用的是 `collect` 的命令模式，官方文档中的 `--background` 只适用于 server mode。
 - 如果不使用 `&`、第二个终端，或者其它后台运行方式，`dotnet-coverage collect --session-id ... "dotnet run ..."` 会一直占用前台，脚本后续步骤不会自动继续执行。
 - `SampleApi` 的控制器路由当前是 `api/...`，例如健康检查是 `/api/health`，计算接口是 `/api/calculator/multiply`、`/api/calculator/divide`，项目条目接口是 `/api/items`。
-- `SampleApi` 脚本启动前会检查 `BASE_URL` 对应端口是否已被监听，并优先清理旧的 `SampleApi`/`dotnet` 相关进程；如需无条件清理当前端口占用者，可显式传入 `FORCE_KILL_PORT_CONFLICT=1`。
-- `SampleLibrary` 生成的 XML 通常位于 `TestResults` 子目录下，因此脚本使用整个输出目录交给 `coveragex` 扫描更稳妥。
+- `SampleApi` 检查 20000 端口，冲突直接失败，只清理自己拥有的采集会话。
+- `SampleLibrary` 记录本轮 XML 显式路径，报告脚本直接传入，不扫描混有旧结果的目录。

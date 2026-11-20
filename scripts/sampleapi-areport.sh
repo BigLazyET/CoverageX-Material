@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_BRANCH="${SOURCE_BRANCH:-foo}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
-XML_FILE="$HOME/.coveragex/output/sampleapi/sampleapi-snapshot.xml"
+OUTPUT_DIR="${OUTPUT_DIR:-$HOME/.coveragex/output/sampleapi}"
+if [[ -z "${XML_FILE:-}" ]]; then
+    XML_FILE="$(cat "$OUTPUT_DIR/latest-xml-path")"
+fi
 REPORT_DIR="$HOME/.coveragex/report/sampleapi-areport"
 RUNTIME_BRANCH="${RUNTIME_BRANCH:-$SOURCE_BRANCH}"
 REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/BigLazyET/CoverageX-Material.git}"
