@@ -230,3 +230,25 @@ REPOSITORY_URL=https://github.com/your-org/CoverageX-Material.git SOURCE_BRANCH=
 - `SampleApi` 的控制器路由当前是 `api/...`，例如健康检查是 `/api/health`，计算接口是 `/api/calculator/multiply`、`/api/calculator/divide`，项目条目接口是 `/api/items`。
 - `SampleApi` 脚本启动前会检查 `BASE_URL` 对应端口是否已被监听，并优先清理旧的 `SampleApi`/`dotnet` 相关进程；如需无条件清理当前端口占用者，可显式传入 `FORCE_KILL_PORT_CONFLICT=1`。
 - `SampleLibrary` 生成的 XML 通常位于 `TestResults` 子目录下，因此脚本使用整个输出目录交给 `coveragex` 扫描更稳妥。
+
+## 可控的真实增量验收分支
+
+`codex/incremental-report-fixture` 从 `main` 创建。`Calculator.cs` 中原有类继续由既有测试命中；同文件新增的 `IncrementalShipping` 仅执行普通配送路径，保留快速配送和折扣方法未覆盖，用来检验增量报告是否同时保留命中/未命中代码、排除未变更类和纯注释变更。
+
+使用项目已有 Coverlet 集成运行完整单测，不需要增加包：
+
+```bash
+dotnet test test/SampleLibrary.UnitTests/SampleLibrary.UnitTests.csproj -c Debug \
+  -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura \
+  -p:CoverletOutput=/tmp/coveragex-fixture/coverage
+coveragex lreport --source codex/incremental-report-fixture --target main \
+  --runtime-branch codex/incremental-report-fixture --source-directory "$PWD" \
+  --report-input-files /tmp/coveragex-fixture/coverage.cobertura.xml \
+  --assembly-filter '+SampleLibrary' --filter-mode diff --report-type Html --report-type Cobertura \
+  --report-directory /tmp/coveragex-fixture/report
+python3 scripts/verify-incremental-fixture.py \
+  --xml /tmp/coveragex-fixture/coverage.cobertura.xml \
+  --report /tmp/coveragex-fixture/report/Cobertura.xml
+```
+
+先提交该测试分支再执行报告：CoverageX 比较已提交分支，不分析工作区未提交变更。验证器按真实 Git diff 与原始 XML 计算预期范围，并核对逐行命中、分支、纯注释排除与同文件未变更类排除。
