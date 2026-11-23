@@ -245,10 +245,12 @@ coveragex lreport --source codex/incremental-report-fixture --target main \
   --runtime-branch codex/incremental-report-fixture --source-directory "$PWD" \
   --report-input-files /tmp/coveragex-fixture/coverage.cobertura.xml \
   --assembly-filter '+SampleLibrary' --filter-mode diff --report-type Html --report-type Cobertura \
-  --report-directory /tmp/coveragex-fixture/report
+  --report-directory /tmp/coveragex-fixture/report \
+  > /tmp/coveragex-fixture/report.stdout 2> /tmp/coveragex-fixture/report.stderr
 python3 scripts/verify-incremental-fixture.py \
   --xml /tmp/coveragex-fixture/coverage.cobertura.xml \
-  --report /tmp/coveragex-fixture/report/Cobertura.xml
+  --report /tmp/coveragex-fixture/report/Cobertura.xml \
+  --scope-log /tmp/coveragex-fixture/report.stderr
 ```
 
-先提交该测试分支再执行报告：CoverageX 比较已提交分支，不分析工作区未提交变更。验证器按真实 Git diff 与原始 XML 计算预期范围，并核对逐行命中、分支、纯注释排除与同文件未变更类排除。
+先提交该测试分支再执行报告：CoverageX 比较已提交分支，不分析工作区未提交变更。验证器按真实 Git diff 与原始 XML 计算预期范围，核对实际作用域日志、选中行命中、分支百分比/总数、纯注释排除与同文件未变更类排除。需保留默认 Information 日志。断言针对 Cobertura 明细，不承诺 HTML 空类汇总或分支 condition 标识导出。

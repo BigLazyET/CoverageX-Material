@@ -10,6 +10,7 @@ from pathlib import Path
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--xml', type=Path, required=True, help='Fresh complete Coverlet Cobertura input')
 p.add_argument('--report', type=Path, required=True, help='CoverageX-generated Cobertura.xml')
+p.add_argument('--scope-log', type=Path, required=True, help='CoverageX stderr with Information scope logs')
 a = p.parse_args()
 repo = Path(__file__).resolve().parent.parent
 source_file = repo / 'src/SampleLibrary/Calculator.cs'
@@ -32,6 +33,17 @@ assert added, 'No committed incremental fixture; commit this branch before repor
 markers = {name: next(i for i, text in enumerate(source, 1) if 'fixture: ' + name in text)
            for name in ('condition', 'missed', 'covered', 'unused')}
 assert set(markers.values()) <= added
+scope_objects = []
+text = a.scope_log.read_text()
+for match in re.finditer(r'\{', text):
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[match.start():])
+    except ValueError:
+        continue
+    if isinstance(value, dict) and value.get('RelativePath') == 'src/SampleLibrary/Calculator.cs':
+        scope_objects.append(value)
+assert len(scope_objects) == 1, 'Need one actual Calculator.cs scope record at Information log level'
+assert set(scope_objects[0]['ChangedLines']) == added, 'Actual Git-derived scope differs from expected meaningful changes'
 raw = ET.parse(a.xml).getroot()
 report = ET.parse(a.report).getroot()
 
@@ -52,8 +64,17 @@ def lines(c):
     return result
 
 def fraction(line):
-    match = re.search(r'\((\d+)/(\d+)\)$', line.get('condition-coverage', ''))
-    return tuple(map(int, match.groups())) if match else None
+    value = line.get('condition-coverage', '')
+    is_branch = line.get('branch', 'false').lower() == 'true'
+    if not value:
+        assert not is_branch, 'Branch line has no coverage fraction'
+        return None
+    match = re.fullmatch(r'(\d+(?:\.\d+)?)%\s*\((\d+)/(\d+)\)', value)
+    assert is_branch and match, 'Malformed branch metadata'
+    percent, covered, total = float(match[1]), int(match[2]), int(match[3])
+    assert 0 <= covered <= total and total > 0
+    assert abs(percent - 100 * covered / total) <= 0.01, 'Branch percentage contradicts its fraction'
+    return covered, total
 
 old_class = named(raw, 'SampleLibrary.Calculator')
 assert any(int(l.get('hits')) > 0 for l in old_class.findall('./lines/line')), 'Baseline unchanged code must actually run'
@@ -71,12 +92,20 @@ for name in ('missed', 'unused'):
     assert int(reported[markers[name]].get('hits')) == 0, name
 assert fraction(reported[markers['condition']]) == (1, 2), 'Only the standard branch should have run'
 comment_line = next(i for i, text in enumerate(source, 1) if 'Fixture: comment-only' in text)
-assert comment_line not in reported
+assert comment_line not in scope_objects[0]['ChangedLines']
+assert all(comment_line != int(line.get('number')) for c in classes(report) for line in c.findall('./lines/line'))
 assert int(report.get('lines-valid')) == len(expected)
 assert int(report.get('lines-covered')) == sum(int(line.get('hits')) > 0 for line in reported.values())
+branch_counts = [fraction(line) for line in reported.values() if fraction(line) is not None]
+covered_branches = sum(pair[0] for pair in branch_counts)
+total_branches = sum(pair[1] for pair in branch_counts)
+assert int(report.get('branches-covered')) == covered_branches
+assert int(report.get('branches-valid')) == total_branches
+assert abs(float(report.get('branch-rate')) - covered_branches / total_branches) <= 0.0001
+assert abs(float(report.get('line-rate')) - sum(int(line.get('hits')) > 0 for line in reported.values()) / len(expected)) <= 0.0001
 print(json.dumps({'sourceCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
     'targetCommit': subprocess.check_output(['git', 'rev-parse', 'main'], cwd=repo, text=True).strip(),
     'changedExecutableLines': sorted(expected), 'markers': markers,
     'coveredLines': sum(int(line.get('hits')) > 0 for line in reported.values()),
     'missedLines': sum(int(line.get('hits')) == 0 for line in reported.values()),
-    'conditionCoverage': '1/2', 'unchangedSameFileClassExcluded': True, 'exactRawHitsAndBranchesPreserved': True}, indent=2))
+    'conditionCoverage': '1/2', 'unchangedSameFileClassExcluded': True, 'selectedLineHitsAndBranchCountsPreserved': True, 'actualGitScopeChecked': True, 'rootBranchTotalsChecked': True, 'conditionIdentityChecked': False}, indent=2))
