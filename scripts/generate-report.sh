@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT_DIR/scripts/coverage-common.sh"
 trap 'finish_workflow "$?"' EXIT
 SAMPLE="${1:-sampleapi}"
-if [[ "$SAMPLE" != sampleapi && "$SAMPLE" != samplelibrary ]]; then
-    echo "Usage: bash scripts/generate-report.sh [sampleapi|samplelibrary]" >&2
+if [[ "$SAMPLE" != sampleapi || $# -gt 1 ]]; then
+    echo "Usage: bash scripts/generate-report.sh [sampleapi]" >&2
     exit 1
 fi
 SKILL_DIR="${COVERAGEX_SKILL_DIR:-$ROOT_DIR/../CoverageX-Agent-Skill/plugins/coveragex-agent-skill/skills/coveragex-incremental-report}"

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
@@ -19,17 +20,17 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task AddEndpoint_ReturnsSum()
     {
         var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/add?a=4&b=5");
+        var resp = await client.GetAsync("/api/calculator/add?a=4&b=5");
         resp.EnsureSuccessStatusCode();
-        var value = await resp.Content.ReadFromJsonAsync<int>();
-        Assert.Equal(9, value);
+        var value = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(9, value.GetProperty("result").GetInt32());
     }
 
     [Fact]
     public async Task Health_ReturnsOk()
     {
         var client = _factory.CreateClient();
-        var resp = await client.GetAsync("/health");
+        var resp = await client.GetAsync("/api/health");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 }

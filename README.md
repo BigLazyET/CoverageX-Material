@@ -1,17 +1,16 @@
 # CoverageX-Material
 
-CoverageX 的实测项目：SampleLibrary 单元测试和 SampleApi HTTP 请求生成覆盖率，再由 CoverageX 分析已提交分支间的增量。
+CoverageX 的实测项目：通过 dotnet-coverage 启动 SampleApi，用 HTTP 请求触发业务并获取覆盖率快照，再分析已提交分支间的增量。单元/集成测试项目仅用于开发回归，不是采集入口。
 
 ## 最短流程
 
 在仓库根目录运行：
 
 ```bash
-bash scripts/generate-report.sh samplelibrary
 bash scripts/generate-report.sh sampleapi
 ```
 
-不传样本名时默认 sampleapi。需要已安装的 dotnet、Git、coveragex、Python3；SampleLibrary 使用项目已有 Code Coverage 数据收集器，SampleApi 还需要 dotnet-coverage 和 curl。初次缺少工具时应明确安装，不由脚本静默替换采集方式。
+不传样本名时默认 sampleapi。脚本面向具备 Bash、lsof、curl 的 Unix 环境，还需要 dotnet、Git、coveragex、Python3 和 dotnet-coverage；主动采集不使用其他采集器。初次缺少工具时应明确安装，不由脚本静默替换采集方式。跨平台桌面操作使用 CoverageX Desktop，本 Bash 示例不承诺原生 Windows 支持。
 
 组合入口会采集、验证新 XML，再报告本轮显式文件；它依赖[公共 Skill](https://github.com/BigLazyET/CoverageX-Agent-Skill)中的 verifier，默认使用相邻仓库路径，可用 COVERAGEX_SKILL_DIR 指向 canonical coveragex-incremental-report 目录。
 
@@ -21,8 +20,8 @@ bash scripts/generate-report.sh sampleapi
 | --- | --- |
 | SOURCE_BRANCH / TARGET_BRANCH | foo / main，均需存在且代码已提交 |
 | RUNTIME_BRANCH | 默认 SOURCE_BRANCH，当前 HEAD 必须匹配 runtime |
-| OUTPUT_DIR | `~/.coveragex/output/<sample>`；每次生成隔离的 run.* 目录 |
-| REPORT_DIR | 本轮 XML 所在目录下的 report/，用于两个本地报告脚本 |
+| OUTPUT_DIR | `~/.coveragex/output/sampleapi`；每次生成隔离的 run.* 目录 |
+| REPORT_DIR | 本轮 XML 所在目录下的 report/ |
 | COVERAGEX_EXECUTABLE | 本地报告/组合入口默认 coveragex，可指定现有 launcher |
 | COVERAGEX_SKILL_DIR | canonical Skill 目录，组合入口需其 scripts/verify_coverage_xml.py |
 
@@ -40,9 +39,8 @@ SOURCE_BRANCH=foo TARGET_BRANCH=main RUNTIME_BRANCH=foo \
 | 脚本 | 用途 |
 | --- | --- |
 | [generate-report.sh](scripts/generate-report.sh) | 推荐组合入口：采集 → verifier → lreport |
-| [samplelibrary-generate-xml.sh](scripts/samplelibrary-generate-xml.sh) | 完整单元测试，已有 Code Coverage 数据收集器输出 Cobertura 和 TRX |
 | [sampleapi-generate-xml.sh](scripts/sampleapi-generate-xml.sh) | 构建后启动 DLL、执行8个HTTP请求、导出覆盖率并结束自有会话 |
-| [samplelibrary-generate-report.sh](scripts/samplelibrary-generate-report.sh)、[sampleapi-generate-report.sh](scripts/sampleapi-generate-report.sh) | 使用已记录或显式指定的 XML 生成本地报告；单独调用不重复验证新鲜度 |
+| [sampleapi-generate-report.sh](scripts/sampleapi-generate-report.sh) | 使用已记录或显式指定的 XML 生成本地报告；单独调用不重复验证新鲜度 |
 | [sampleapi-areport.sh](scripts/sampleapi-areport.sh) | 使用 XML 和受管源码生成报告 |
 
 SampleApi 固定监听20000，BASE_URL 默认 `http://localhost:20000`；其他端口或端口被占用时失败，不杀其他进程。默认会话名每次唯一，可通过 SESSION_ID 指定。
@@ -53,7 +51,7 @@ SampleApi 固定监听20000，BASE_URL 默认 `http://localhost:20000`；其他�
 COLLECTION_MODE=final bash scripts/generate-report.sh sampleapi
 ```
 
-SampleLibrary 的当前数据收集器路径与现有 Coverlet MSBuild 采集不是同一入口。其他生产者需要已有集成与有效的 sources/filename 映射，不能仅凭 XML 格式名推断正确性。
+已有 XML 可由用户采用任意工具生成；报告端仍需验证格式、sources/filename 映射和源码版本，不负责其生产工具的安装或配置。脚本是显式命令行入口；AI/桌面交互仍应在生成报告前确认实际输入。
 
 ## areport 的单独约定
 
@@ -61,9 +59,9 @@ sampleapi-areport.sh 默认 REPOSITORY_URL 为 `https://github.com/BigLazyET/Cov
 
 ## 真实增量验收分支
 
-[codex/incremental-report-fixture](https://github.com/BigLazyET/CoverageX-Material/tree/codex/incremental-report-fixture) 保留提交2cffe96的控制样本：同文件保留旧类命中，新增代码包含已覆盖/未覆盖路径，使用完整现有 Coverlet 测试和独立验证器核对真实 Git ChangedLines 与行/分支数据。
+[codex/incremental-report-fixture](https://github.com/BigLazyET/CoverageX-Material/tree/codex/incremental-report-fixture) 保留提交 2cffe96 的历史控制样本，其新增业务代码原仅由测试工程触达，不是当前应用采集入口。当前 CoverageX 桌面验收在一次性克隆中追加 HTTP 路由，通过业务请求与 dotnet-coverage 快照核对 ChangedLines、命中/未命中及 CLI/桌面指标，不重写历史提交。
 
-这是固定历史样本，有自己的脚本版本；复现按该分支末尾的专用验收说明执行，不将其旧通用流程套用到当前 foo 脚本。无需合并该分支来使用本仓库的现行脚本。
+这是固定历史样本，有自己的脚本版本；其旧采集说明不属于现行支持流程。无需合并该分支来使用当前应用脚本。
 
 ## 验证脚本
 
