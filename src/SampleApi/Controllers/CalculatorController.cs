@@ -12,6 +12,9 @@ public class CalculatorController : ControllerBase
     [HttpGet("add")]
     public IActionResult Add([FromQuery] int a, [FromQuery] int b)
     {
+        Console.WriteLine($"a: {a}");
+        Console.WriteLine($"b: {b}");
+        Console.WriteLine($"a + b: {a + b}");
         return Ok(new { a, b, operation = "add", result = _calculator.Add(a, b) });
     }
 
