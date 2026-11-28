@@ -14,6 +14,10 @@ public class CalculatorController : ControllerBase
     {
         Console.WriteLine($"a: {a}");
         Console.WriteLine($"b: {b}");
+
+        a += 1;
+        b += 2;
+        
         Console.WriteLine($"a + b: {a + b}");
         return Ok(new { a, b, operation = "add", result = _calculator.Add(a, b) });
     }
